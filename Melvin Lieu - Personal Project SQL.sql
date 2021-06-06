@@ -1,0 +1,529 @@
+/*
+	Personal Project SQL: Melvin Cruise Line
+	Melvin Lieu
+*/
+
+-- Use my database
+USE km_lieumelvin; 
+
+/*
+	Drop Tables Stored Procedure
+*/
+	DELIMITER $$
+	DROP PROCEDURE IF EXISTS SP_DROP_TABLES$$
+	CREATE PROCEDURE SP_DROP_TABLES ()
+	BEGIN
+
+	/*
+	  Drop Tables so the database starts fresh
+	*/
+		DROP TABLE IF EXISTS STAFF; 
+		DROP TABLE IF EXISTS CERTIFICATION;
+		DROP TABLE IF EXISTS DEPARTMENT; 
+		DROP TABLE IF EXISTS CUSTOMERTRIPS; 
+		DROP TABLE IF EXISTS TRIP; 
+		DROP TABLE IF EXISTS ROUTE; 
+		DROP TABLE IF EXISTS CUSTOMER; 
+		DROP TABLE IF EXISTS EMPLOYEE; 
+		DROP TABLE IF EXISTS SHIP; 
+    
+	END$$
+	DELIMITER ;
+
+
+/*
+	Create Tables Stored Procedure
+*/
+	DELIMITER $$
+	DROP PROCEDURE IF EXISTS SP_CREATE_TABLES$$
+	CREATE PROCEDURE SP_CREATE_TABLES ()
+	BEGIN
+
+	/* 
+		Create Tables
+	*/
+
+		-- Create the SHIP table
+		CREATE TABLE IF NOT EXISTS SHIP (
+			SHIP_ID INT AUTO_INCREMENT PRIMARY KEY,
+			SHIP_NAME VARCHAR (30) NOT NULL); 
+
+		-- Create the EMPLOYEE table
+		CREATE TABLE IF NOT EXISTS EMPLOYEE (
+			EMPLOYEE_ID INT AUTO_INCREMENT PRIMARY KEY, 
+			EMPLOYEE_FIRST_NAME VARCHAR (30) NOT NULL,
+			EMPLOYEE_LAST_NAME VARCHAR (30) NOT NULL); 
+
+		-- Create the CUSTOMER table
+		CREATE TABLE IF NOT EXISTS CUSTOMER (
+			CUSTOMER_ID INT AUTO_INCREMENT PRIMARY KEY, 
+			CUSTOMER_FIRST_NAME VARCHAR (30) NOT NULL,
+			CUSTOMER_LAST_NAME VARCHAR (30) NOT NULL,
+			CUSTOMER_BDAY DATE NOT NULL, 
+			CUSTOMER_ORIGIN VARCHAR (30) NOT NULL, 
+			CUSTOMER_EMAIL VARCHAR (50) NOT NULL); 
+
+		-- Create the ROUTE table
+		CREATE TABLE IF NOT EXISTS ROUTE (
+			ROUTE_ID INT AUTO_INCREMENT PRIMARY KEY, 
+			ROUTE_DEPARTURE VARCHAR (20) NOT NULL,
+			ROUTE_ARRIVAL VARCHAR (20) NOT NULL); 
+
+		-- Create the TRIP table
+		CREATE TABLE IF NOT EXISTS TRIP (
+			TRIP_ID INT AUTO_INCREMENT PRIMARY KEY, 
+			ROUTE_ID INT NOT NULL, 
+			SHIP_ID INT NOT NULL, 
+			TRIP_DATE DATE NOT NULL,
+			FOREIGN KEY (ROUTE_ID) REFERENCES ROUTE(ROUTE_ID), 
+			FOREIGN KEY (SHIP_ID) REFERENCES SHIP(SHIP_ID));
+
+		-- Create the CUSTOMERTRIPS table
+		CREATE TABLE IF NOT EXISTS CUSTOMERTRIPS (
+			TRIP_ID INT,
+			CUSTOMER_ID INT, 
+			FOREIGN KEY (TRIP_ID) REFERENCES TRIP(TRIP_ID), 
+			FOREIGN KEY (CUSTOMER_ID) REFERENCES CUSTOMER(CUSTOMER_ID),
+			PRIMARY KEY (TRIP_ID, CUSTOMER_ID));
+
+		-- Create the DEPARTMENT table
+		CREATE TABLE IF NOT EXISTS DEPARTMENT (
+			DEPARTMENT_ID INT AUTO_INCREMENT PRIMARY KEY, 
+			DEPARTMENT_NAME VARCHAR (20) NOT NULL); 
+
+		-- Create the CERTIFICATION table
+		CREATE TABLE IF NOT EXISTS CERTIFICATION (
+			DEPARTMENT_ID INT, 
+			EMPLOYEE_ID INT, 
+			CERTIFICATION_DATE DATE NOT NULL,
+			FOREIGN KEY (DEPARTMENT_ID) REFERENCES DEPARTMENT(DEPARTMENT_ID), 
+			FOREIGN KEY (EMPLOYEE_ID) REFERENCES EMPLOYEE(EMPLOYEE_ID),
+			PRIMARY KEY (DEPARTMENT_ID, EMPLOYEE_ID));     
+
+		-- Create the STAFF table
+		CREATE TABLE IF NOT EXISTS STAFF (
+			TRIP_ID INT, 
+			EMPLOYEE_ID INT,
+			DEPARTMENT_ID INT,
+			FOREIGN KEY (TRIP_ID) REFERENCES TRIP(TRIP_ID),
+			FOREIGN KEY (EMPLOYEE_ID) REFERENCES EMPLOYEE(EMPLOYEE_ID),
+			PRIMARY KEY (TRIP_ID, EMPLOYEE_ID)); 
+	END$$
+	DELIMITER;
+    
+
+/*
+	Stored Procedures
+*/
+
+
+DELIMITER $$	
+-- Create/Replace a Procedure called SP_CUSTOMER_ADD that adds a customer if they do not exist
+DROP PROCEDURE IF EXISTS SP_CUSTOMER_ADD$$
+CREATE PROCEDURE SP_CUSTOMER_ADD (IN C_FIRST_NAME VARCHAR(30),IN C_LAST_NAME VARCHAR(30), IN C_BDAY DATE, IN C_ORIGIN VARCHAR(30), IN C_EMAIL VARCHAR(50)) 
+BEGIN
+	INSERT INTO CUSTOMER (CUSTOMER_FIRST_NAME, CUSTOMER_LAST_NAME, CUSTOMER_BDAY, CUSTOMER_ORIGIN, CUSTOMER_EMAIL)
+	SELECT C_FIRST_NAME, C_LAST_NAME, C_BDAY, C_ORIGIN, C_EMAIL
+	WHERE 
+		NOT EXISTS (SELECT CUSTOMER_ID FROM CUSTOMER WHERE CUSTOMER_FIRST_NAME = C_FIRST_NAME AND CUSTOMER_LAST_NAME = C_LAST_NAME);
+END$$
+
+-- Create/Replace a Procedure called SP_SHIP_ADD that adds a ship if it does not exist
+DROP PROCEDURE IF EXISTS SP_SHIP_ADD$$
+CREATE PROCEDURE SP_SHIP_ADD (IN S_NAME VARCHAR(30)) 
+BEGIN
+	INSERT INTO SHIP (SHIP_NAME)
+    SELECT S_NAME
+    WHERE 
+		NOT EXISTS (SELECT SHIP_ID FROM SHIP WHERE SHIP_NAME = S_NAME); 
+END$$ 
+
+-- Create/Replace a Procedure called SP_ROUTE_ADD that adds a route if it does not exist
+DROP PROCEDURE IF EXISTS SP_ROUTE_ADD$$
+CREATE PROCEDURE SP_ROUTE_ADD (IN R_DEPARTURE VARCHAR(20), IN R_ARRIVAL VARCHAR(20))
+BEGIN 
+	INSERT INTO ROUTE (ROUTE_DEPARTURE, ROUTE_ARRIVAL)
+    SELECT R_DEPARTURE, R_ARRIVAL
+    WHERE
+		NOT EXISTS (SELECT ROUTE_ID FROM ROUTE WHERE ROUTE_DEPARTURE = R_DEPARTURE AND ROUTE_ARRIVAL = R_ARRIVAL); 
+END$$
+
+-- Create/Replace a Procedure called SP_DEPARTMENT_ADD that adds a department if it does not exist
+DROP PROCEDURE IF EXISTS SP_DEPARTMENT_ADD$$
+CREATE PROCEDURE SP_DEPARTMENT_ADD (IN D_NAME VARCHAR(20))
+BEGIN
+	INSERT INTO DEPARTMENT (DEPARTMENT_NAME)
+    SELECT D_NAME
+    WHERE
+		NOT EXISTS (SELECT DEPARTMENT_ID FROM DEPARTMENT WHERE DEPARTMENT_NAME = D_NAME);
+END$$
+
+-- Create/Replace a Procedure called SP_TRIP_ADD that adds a trip if it does not exist
+DROP PROCEDURE IF EXISTS SP_TRIP_ADD$$
+CREATE PROCEDURE SP_TRIP_ADD (IN R_DEPARTURE VARCHAR(20), IN R_ARRIVAL VARCHAR(20), S_NAME VARCHAR(30), T_DATE DATE)
+BEGIN
+
+	SET @R_ID = 0;
+    SET @S_ID = 0;
+    
+    SELECT ROUTE_ID INTO @R_ID
+    FROM ROUTE
+    WHERE (ROUTE_DEPARTURE = R_DEPARTURE) AND (ROUTE_ARRIVAL = R_ARRIVAL);
+    
+    SELECT SHIP_ID INTO @S_ID
+    FROM SHIP
+    WHERE (SHIP_NAME = S_NAME); 
+
+	INSERT INTO TRIP (ROUTE_ID, SHIP_ID, TRIP_DATE)
+    SELECT @R_ID, @S_ID, T_DATE
+    WHERE 
+		T_DATE > CURDATE() AND NOT EXISTS (SELECT ROUTE_ID FROM TRIP WHERE ROUTE_ID = @R_ID AND SHIP_ID = @S_ID AND TRIP_DATE = T_DATE);
+END$$
+
+-- Create/Replace a Procedure called SP_CERTIFICATION_ADD that adds a certification to an employee if it does not exist
+	-- Error produced if employee first/last names or department name does not already exist in database.
+DROP PROCEDURE IF EXISTS SP_CERTIFICATION_ADD$$
+CREATE PROCEDURE SP_CERTIFICATION_ADD (IN E_FIRST_NAME VARCHAR(30), IN E_LAST_NAME VARCHAR(30), IN D_NAME VARCHAR(20))
+BEGIN
+	SET @D_ID = 0;
+    SET @E_ID = 0; 
+    
+	SELECT DEPARTMENT_ID INTO @D_ID
+    FROM DEPARTMENT 
+    WHERE DEPARTMENT_NAME = D_NAME; 
+    
+    SELECT EMPLOYEE_ID INTO @E_ID 
+    FROM EMPLOYEE
+    WHERE EMPLOYEE_FIRST_NAME = E_FIRST_NAME AND EMPLOYEE_LAST_NAME = E_LAST_NAME; 
+    
+    INSERT INTO CERTIFICATION (DEPARTMENT_ID, EMPLOYEE_ID, CERTIFICATION_DATE)
+    SELECT @D_ID, @E_ID, CURDATE()
+    WHERE 
+		NOT EXISTS (SELECT DEPARTMENT_ID FROM CERTIFICATION WHERE DEPARTMENT_ID = @D_ID AND  EMPLOYEE_ID = @E_ID); 
+    
+END$$
+
+-- Create/Replace a Procedure called SP_EMPLOYEE_ADD that adds an employee if they do not exist
+DROP PROCEDURE IF EXISTS SP_EMPLOYEE_ADD$$
+CREATE PROCEDURE SP_EMPLOYEE_ADD (IN E_FIRST_NAME VARCHAR(30), IN E_LAST_NAME VARCHAR(30))
+BEGIN
+	INSERT INTO EMPLOYEE (EMPLOYEE_FIRST_NAME, EMPLOYEE_LAST_NAME)
+    SELECT E_FIRST_NAME, E_LAST_NAME
+    WHERE
+		NOT EXISTS (SELECT EMPLOYEE_ID FROM EMPLOYEE WHERE EMPLOYEE_FIRST_NAME = E_FIRST_NAME AND EMPLOYEE_LAST_NAME = E_LAST_NAME); 
+END$$
+
+-- Create/Replace a Procedure called SP_STAFF_ADD that adds an employee to the staff for a trip if they do not exist. 
+	-- Error produced if input ship name, departure/arrival names, trip date, or employee first/last names do not already exist in database. 
+    -- Error produced if employee tries to work under more than 1 department during a certain trip.
+DROP PROCEDURE IF EXISTS SP_STAFF_ADD$$
+CREATE PROCEDURE SP_STAFF_ADD (IN S_NAME VARCHAR(30), IN R_DEPARTURE VARCHAR(20), IN R_ARRIVAL VARCHAR(20), IN T_DATE DATE, 
+								IN D_NAME VARCHAR(20), IN E_FIRST_NAME VARCHAR(30), IN E_LAST_NAME VARCHAR(30))
+BEGIN
+	SET @T_ID = 0; 
+	SET @E_ID = 0; 
+	SET @D_ID = 0;
+    
+    SELECT TRIP_ID INTO @T_ID
+    FROM TRIP
+    WHERE (TRIP.SHIP_ID = (SELECT SHIP_ID FROM SHIP WHERE SHIP_NAME = S_NAME)) AND (TRIP.ROUTE_ID = (SELECT ROUTE_ID FROM ROUTE WHERE ROUTE_DEPARTURE = R_DEPARTURE AND ROUTE_ARRIVAL = R_ARRIVAL));
+    
+    SELECT EMPLOYEE_ID INTO @E_ID
+    FROM EMPLOYEE
+    WHERE (EMPLOYEE_FIRST_NAME = E_FIRST_NAME AND EMPLOYEE_LAST_NAME = E_LAST_NAME);
+    
+    SELECT DEPARTMENT_ID INTO @D_ID
+    FROM DEPARTMENT
+    WHERE (DEPARTMENT_NAME = D_NAME); 
+    
+    INSERT INTO STAFF (TRIP_ID, EMPLOYEE_ID, DEPARTMENT_ID)
+    SELECT @T_ID, @E_ID, @D_ID
+    WHERE
+		NOT EXISTS (SELECT EMPLOYEE_ID FROM STAFF WHERE EMPLOYEE_ID = @E_ID AND TRIP_ID = @T_ID); 
+	
+END$$
+
+
+-- Create/Replace a Procedure called SP_CUSTOMERTRIPS_ADD that adds a trip for a customer if it does not exist
+	-- Error produced if customer information does not already exist in database, customer information is incorrect, or if route departure/arrival do not exist, or trip date is incorrect.
+DROP PROCEDURE IF EXISTS SP_CUSTOMERTRIPS_ADD$$
+CREATE PROCEDURE SP_CUSTOMERTRIPS_ADD (IN C_FIRST_NAME VARCHAR(30),IN C_LAST_NAME VARCHAR(30), IN C_BDAY DATE, IN C_ORIGIN VARCHAR(30), IN C_EMAIL VARCHAR(50), 
+										IN R_DEPARTURE VARCHAR(20), IN R_ARRIVAL VARCHAR(20), IN T_DATE DATE)
+BEGIN
+	SET @C_ID = 0;
+    SET @T_ID = 0; 
+    
+    SELECT CUSTOMER_ID INTO @C_ID
+    FROM CUSTOMER
+    WHERE (CUSTOMER_FIRST_NAME = C_FIRST_NAME AND CUSTOMER_LAST_NAME = C_LAST_NAME AND CUSTOMER_BDAY = C_BDAY AND CUSTOMER_ORIGIN = C_ORIGIN AND CUSTOMER_EMAIL = C_EMAIL);
+    
+    SELECT TRIP_ID INTO @T_ID
+    FROM TRIP
+    WHERE (ROUTE_ID = (SELECT ROUTE_ID FROM ROUTE WHERE ROUTE_DEPARTURE = R_DEPARTURE AND ROUTE_ARRIVAL = R_ARRIVAL)) AND (TRIP_DATE = T_DATE); 
+
+	INSERT INTO CUSTOMERTRIPS (CUSTOMER_ID, TRIP_ID)
+    SELECT @C_ID, @T_ID
+    WHERE 
+		NOT EXISTS (SELECT CUSTOMER_ID FROM CUSTOMERTRIPS WHERE CUSTOMER_ID = @C_ID AND TRIP_ID = @T_ID); 
+END$$
+
+DELIMITER ; 
+
+
+/*
+	Insert Data Stored Procedure
+*/
+	DELIMITER $$
+	DROP PROCEDURE IF EXISTS SP_POPULATE_DATA$$
+	CREATE PROCEDURE SP_POPULATE_DATA ()
+	BEGIN
+
+
+	-- Add ships: Athena and Evelynn
+	CALL SP_SHIP_ADD ('Athena');
+	CALL SP_SHIP_ADD ('Evelynn');
+
+
+	-- Add routes: (San Diego to Seattle) and (San Francisco to Anchorage) and (Anchorage to Honolulu) 
+	CALL SP_ROUTE_ADD ('San Diego', 'Seattle'); 
+	CALL SP_ROUTE_ADD ('San Francisco', 'Anchorage'); 
+	CALL SP_ROUTE_ADD ('Anchorage', 'Honolulu'); 
+
+
+	-- Add trips: (San Diego to Seattle) on 2021-05-18 and (San Francisco to Anchorage) on 2021-05-19 and (Anchorage to Honolulu) on 2021-05-25
+	CALL SP_TRIP_ADD ('San Diego', 'Seattle', 'Athena', '2021-06-18'); 
+	CALL SP_TRIP_ADD ('San Francisco', 'Anchorage', 'Evelynn', '2021-06-19'); 
+	CALL SP_TRIP_ADD ('Anchorage', 'Honolulu', 'Evelynn', '2021-06-25'); 
+
+
+	-- Add departments: Kitchen, Cabin, Deck, Performance, Fitness and Beauty, Control Room, and Emergency
+	CALL SP_DEPARTMENT_ADD ('Kitchen');
+	CALL SP_DEPARTMENT_ADD ('Cabin');
+	CALL SP_DEPARTMENT_ADD ('Deck');
+	CALL SP_DEPARTMENT_ADD ('Performance');
+	CALL SP_DEPARTMENT_ADD ('Fitness and Beauty');
+	CALL SP_DEPARTMENT_ADD ('Control Room');
+	CALL SP_DEPARTMENT_ADD ('Emergency');
+ 
+
+	-- Add employees: Sarah Hartley, Matthew Manacio, Melvin Lieu, Richard Bankhead, Masako Wada, Kevan Elias, Sean Yamamoto, Ayaka Kudou, Zen Miyashiro, Mike Uyema, Kainoa Scott, and Ichigo Kurosaki
+	CALL SP_EMPLOYEE_ADD ('Sarah', 'Hartley'); 
+	CALL SP_EMPLOYEE_ADD ('Matthew', 'Manacio'); 
+	CALL SP_EMPLOYEE_ADD ('Melvin', 'Lieu'); 
+	CALL SP_EMPLOYEE_ADD ('Richard', 'Bankhead'); 
+	CALL SP_EMPLOYEE_ADD ('Masako', 'Wada'); 
+	CALL SP_EMPLOYEE_ADD ('Kevan', 'Elias'); 
+	CALL SP_EMPLOYEE_ADD ('Sean', 'Yamamoto'); 
+	CALL SP_EMPLOYEE_ADD ('Ayaka', 'Kudou'); 
+	CALL SP_EMPLOYEE_ADD ('Zen', 'Miyashiro'); 
+	CALL SP_EMPLOYEE_ADD ('Mike', 'Uyema'); 
+	CALL SP_EMPLOYEE_ADD ('Kainoa', 'Scott'); 
+	CALL SP_EMPLOYEE_ADD ('Ichigo', 'Kurosaki'); 
+
+
+	-- Add customers: Ryo Tashiro, Ohana Takashima, Amos Jun, Rachel Sterling, Daisy Chang, Aaron Wallen, and Katherine Wallen
+	CALL SP_CUSTOMER_ADD ('Ryo', 'Tashiro', '2000-01-21', 'Japan', 'ryotashiro999@gmail.com'); 
+	CALL SP_CUSTOMER_ADD ('Ohana', 'Takashima', '1978-07-06', 'Japan', 'ohanatakashima77@gmail.com'); 
+	CALL SP_CUSTOMER_ADD ('Amos', 'Jun', '2000-02-13', 'Korea', 'amosjjjun@hotmail.com'); 
+	CALL SP_CUSTOMER_ADD ('Rachel', 'Sterling', '1999-05-26', 'US', 'rachelisthebomb@gmail.com'); 
+	CALL SP_CUSTOMER_ADD ('Daisy', 'Chang', '1995-08-03', 'UK', 'daizzychang777@yahoo.com'); 
+	CALL SP_CUSTOMER_ADD ('Aaron', 'Wallen', '1982-07-16', 'US', 'awallen@gmail.com'); 
+	CALL SP_CUSTOMER_ADD ('Katherine', 'Wallen', '1988-10-08', 'US', 'kwallen@gmail.com'); 
+
+
+	-- Add customer trips
+	CALL SP_CUSTOMERTRIPS_ADD ('Ryo', 'Tashiro', '2000-01-21', 'Japan', 'ryotashiro999@gmail.com', 'San Diego', 'Seattle', '2021-06-18'); 
+	CALL SP_CUSTOMERTRIPS_ADD ('Katherine', 'Wallen', '1988-10-08', 'US', 'kwallen@gmail.com', 'San Diego', 'Seattle', '2021-06-18'); 
+	CALL SP_CUSTOMERTRIPS_ADD ('Aaron', 'Wallen', '1982-07-16', 'US', 'awallen@gmail.com', 'San Diego', 'Seattle', '2021-06-18'); 
+	CALL SP_CUSTOMERTRIPS_ADD ('Ohana', 'Takashima', '1978-07-06', 'Japan', 'ohanatakashima77@gmail.com', 'San Francisco', 'Anchorage', '2021-06-19');
+	CALL SP_CUSTOMERTRIPS_ADD ('Amos', 'Jun', '2000-02-13', 'Korea', 'amosjjjun@hotmail.com', 'San Francisco', 'Anchorage', '2021-06-19'); 
+	CALL SP_CUSTOMERTRIPS_ADD ('Ohana', 'Takashima', '1978-07-06', 'Japan', 'ohanatakashima77@gmail.com', 'Anchorage', 'Honolulu', '2021-06-25'); 
+	CALL SP_CUSTOMERTRIPS_ADD ('Rachel', 'Sterling', '1999-05-26', 'US', 'rachelisthebomb@gmail.com', 'Anchorage', 'Honolulu', '2021-06-25'); 
+	CALL SP_CUSTOMERTRIPS_ADD ('Daisy', 'Chang', '1995-08-03', 'UK', 'daizzychang777@yahoo.com', 'Anchorage', 'Honolulu', '2021-06-25'); 
+
+
+	-- Add certifications for employees
+	CALL SP_CERTIFICATION_ADD ('Sarah', 'Hartley', 'Control Room'); 
+	CALL SP_CERTIFICATION_ADD ('Matthew', 'Manacio', 'Kitchen');      
+	CALL SP_CERTIFICATION_ADD ('Melvin', 'Lieu', 'Kitchen'); 
+	CALL SP_CERTIFICATION_ADD ('Richard', 'Bankhead', 'Performance');  
+	CALL SP_CERTIFICATION_ADD ('Masako', 'Wada', 'Performance'); 
+	CALL SP_CERTIFICATION_ADD ('Kevan', 'Elias', 'Deck');  
+	CALL SP_CERTIFICATION_ADD ('Sean', 'Yamamoto', 'Fitness and Beauty'); 
+	CALL SP_CERTIFICATION_ADD ('Zen', 'Miyashiro', 'Control Room');  
+	CALL SP_CERTIFICATION_ADD ('Mike', 'Uyema', 'Control Room');  
+	CALL SP_CERTIFICATION_ADD ('Kainoa', 'Scott', 'Deck');  
+	CALL SP_CERTIFICATION_ADD ('Kainoa', 'Scott', 'Cabin'); 
+	CALL SP_CERTIFICATION_ADD ('Ichigo', 'Kurosaki', 'Cabin');  
+
+
+	-- Add staff: Determines which employees will be working under which department for certain trips
+	CALL SP_STAFF_ADD ('Athena', 'San Diego', 'Seattle', '2021-06-18', 'Control Room', 'Sarah', 'Hartley');
+	CALL SP_STAFF_ADD ('Athena', 'San Diego', 'Seattle', '2021-06-18', 'Kitchen', 'Matthew', 'Manacio');
+	CALL SP_STAFF_ADD ('Athena', 'San Diego', 'Seattle', '2021-06-18', 'Performance', 'Richard', 'Bankhead');
+	CALL SP_STAFF_ADD ('Athena', 'San Diego', 'Seattle', '2021-06-18', 'Deck', 'Kevan', 'Elias');
+	CALL SP_STAFF_ADD ('Athena', 'San Diego', 'Seattle', '2021-06-18', 'Fitness and Beauty', 'Sean', 'Yamamoto');
+	CALL SP_STAFF_ADD ('Athena', 'San Diego', 'Seattle', '2021-06-18', 'Control Room', 'Zen', 'Miyashiro');
+	CALL SP_STAFF_ADD ('Athena', 'San Diego', 'Seattle', '2021-06-18', 'Cabin', 'Ichigo', 'Kurosaki');
+
+	CALL SP_STAFF_ADD ('Evelynn', 'San Francisco', 'Anchorage', '2021-06-19', 'Kitchen', 'Melvin', 'Lieu');
+	CALL SP_STAFF_ADD ('Evelynn', 'San Francisco', 'Anchorage', '2021-06-19', 'Performance', 'Masako', 'Wada');
+	CALL SP_STAFF_ADD ('Evelynn', 'San Francisco', 'Anchorage', '2021-06-19', 'Control Room', 'Mike', 'Uyema');
+	CALL SP_STAFF_ADD ('Evelynn', 'San Francisco', 'Anchorage', '2021-06-19', 'Deck', 'Kainoa', 'Scott');
+
+	CALL SP_STAFF_ADD ('Evelynn', 'Anchorage', 'Honolulu', '2021-06-25', 'Kitchen', 'Melvin', 'Lieu');
+	CALL SP_STAFF_ADD ('Evelynn', 'Anchorage', 'Honolulu', '2021-06-25', 'Control Room', 'Mike', 'Uyema');
+	CALL SP_STAFF_ADD ('Evelynn', 'Anchorage', 'Honolulu', '2021-06-25', 'Cabin', 'Kainoa', 'Scott');
+
+	END$$
+	DELIMITER ;
+
+/*
+	Create Views Stored Procedure
+*/
+	DELIMITER $$
+	DROP PROCEDURE IF EXISTS SP_CREATE_VIEWS$$
+	CREATE PROCEDURE SP_CREATE_VIEWS()
+	BEGIN
+    
+	/*
+		Create Views
+	*/
+
+		-- View all customers and their trip information
+		CREATE OR REPLACE VIEW VIEW_CUSTOMERS_ALL AS
+			SELECT 
+				ROUTE.ROUTE_DEPARTURE, ROUTE.ROUTE_ARRIVAL, TRIP.TRIP_DATE, SHIP.SHIP_NAME, CONCAT(CUSTOMER_FIRST_NAME,', ',CUSTOMER_LAST_NAME) as 'FULLNAME'
+			FROM CUSTOMERTRIPS
+			INNER JOIN CUSTOMER ON CUSTOMER.CUSTOMER_ID = CUSTOMERTRIPS.CUSTOMER_ID
+			INNER JOIN TRIP ON TRIP.TRIP_ID = CUSTOMERTRIPS.TRIP_ID
+			INNER JOIN SHIP ON SHIP.SHIP_ID = TRIP.SHIP_ID
+			INNER JOIN ROUTE ON ROUTE.ROUTE_ID = TRIP.ROUTE_ID; 
+		
+
+		-- View Employees and their employement information
+		CREATE OR REPLACE VIEW VIEW_EMPLOYEES_ALL AS
+			SELECT 
+				DEPARTMENT.DEPARTMENT_NAME, CERTIFICATION.CERTIFICATION_DATE, CONCAT(EMPLOYEE_FIRST_NAME, ', ', EMPLOYEE_LAST_NAME) AS 'FULLNAME'
+			FROM CERTIFICATION
+			INNER JOIN DEPARTMENT ON DEPARTMENT.DEPARTMENT_ID = CERTIFICATION.DEPARTMENT_ID
+			INNER JOIN EMPLOYEE ON EMPLOYEE.EMPLOYEE_ID = CERTIFICATION.EMPLOYEE_ID; 
+		
+
+		-- View which employees are working in which department on each trip
+		CREATE OR REPLACE VIEW VIEW_STAFF_ALL AS
+			SELECT 
+				ROUTE.ROUTE_DEPARTURE, ROUTE.ROUTE_ARRIVAL, TRIP.TRIP_DATE, DEPARTMENT.DEPARTMENT_NAME, CONCAT(EMPLOYEE_FIRST_NAME, ', ', EMPLOYEE_LAST_NAME) AS 'FULLNAME'
+			FROM STAFF
+			INNER JOIN TRIP ON TRIP.TRIP_ID = STAFF.TRIP_ID
+            INNER JOIN ROUTE ON ROUTE.ROUTE_ID = TRIP.ROUTE_ID
+            INNER JOIN DEPARTMENT ON DEPARTMENT.DEPARTMENT_ID = STAFF.DEPARTMENT_ID
+            INNER JOIN EMPLOYEE ON EMPLOYEE.EMPLOYEE_ID = STAFF.EMPLOYEE_ID; 
+
+
+		-- View all trips and their information
+		CREATE OR REPLACE VIEW VIEW_TRIP_ALL AS
+			SELECT 
+				TRIP.TRIP_DATE, SHIP.SHIP_NAME, ROUTE.ROUTE_DEPARTURE, ROUTE.ROUTE_ARRIVAL
+			FROM TRIP
+			INNER JOIN SHIP ON SHIP.SHIP_ID = TRIP.SHIP_ID
+			INNER JOIN ROUTE ON ROUTE.ROUTE_ID = TRIP.ROUTE_ID; 
+		
+
+		-- Which of the customers will be on the trip from San Diego to Seattle?
+		CREATE OR REPLACE VIEW VIEW_CUSTOMERS_SANDIEGOTOSEATTLE AS
+			SELECT CUSTOMER.CUSTOMER_FIRST_NAME AS 'First Name', CUSTOMER.CUSTOMER_LAST_NAME AS 'Last Name'
+			FROM CUSTOMER
+			INNER JOIN CUSTOMERTRIPS ON CUSTOMERTRIPS.CUSTOMER_ID = CUSTOMER.CUSTOMER_ID 
+			INNER JOIN TRIP ON TRIP.TRIP_ID = CUSTOMERTRIPS.TRIP_ID
+			INNER JOIN ROUTE ON ROUTE.ROUTE_ID = TRIP.ROUTE_ID
+			WHERE ROUTE.ROUTE_DEPARTURE = 'San Diego' AND ROUTE.ROUTE_ARRIVAL = 'Seattle'; 
+		
+
+		-- What is the number of customers that will be sailing from Anchorage to Honolulu?
+		CREATE OR REPLACE VIEW VIEW_CUSTOMERSTOTAL_ANCHORAGETOHONOLULU AS
+			SELECT COUNT(CUSTOMER.CUSTOMER_ID) AS 'Total from Anchorage to Honolulu'
+			FROM CUSTOMER
+			INNER JOIN CUSTOMERTRIPS ON CUSTOMERTRIPS.CUSTOMER_ID = CUSTOMER.CUSTOMER_ID 
+			INNER JOIN TRIP ON TRIP.TRIP_ID = CUSTOMERTRIPS.TRIP_ID
+			INNER JOIN ROUTE ON ROUTE.ROUTE_ID = TRIP.ROUTE_ID
+			WHERE ROUTE.ROUTE_DEPARTURE = 'Anchorage' AND ROUTE.ROUTE_ARRIVAL = 'Honolulu';
+		
+
+		-- What is the number of trips Daisy Chang is not going to be on?
+		CREATE OR REPLACE VIEW VIEW_TOTALTRIPS_WITHOUTDAISYCHANG AS
+			SELECT (MAX(TRIP.TRIP_ID) - COUNT(TRIP.TRIP_ID)) AS 'Number of Trips without Daisy Chang'
+			FROM CUSTOMER
+			INNER JOIN CUSTOMERTRIPS ON CUSTOMERTRIPS.CUSTOMER_ID = CUSTOMER.CUSTOMER_ID 
+			INNER JOIN TRIP ON TRIP.TRIP_ID = CUSTOMERTRIPS.TRIP_ID
+			WHERE CUSTOMER.CUSTOMER_FIRST_NAME = 'Daisy' AND CUSTOMER.CUSTOMER_LAST_NAME = 'Chang';  
+		
+
+		-- Which departments do not have any staff on any of the trips? Using left outer join 
+		CREATE OR REPLACE VIEW VIEW_NOSTAFF_DEPARTMENTS AS
+			SELECT DEPARTMENT_NAME AS 'Department', TRIP.TRIP_DATE AS 'Trip date'
+			FROM DEPARTMENT
+			LEFT OUTER JOIN STAFF ON STAFF.DEPARTMENT_ID = DEPARTMENT.DEPARTMENT_ID
+			LEFT OUTER JOIN TRIP ON TRIP.TRIP_ID = STAFF.TRIP_ID; 
+		
+
+		-- What is the number of ships that will be sailing before 2021-05-24?
+		CREATE OR REPLACE VIEW VIEW_TOTALSHIPSSAIL_BEFOREDATE AS
+			SELECT COUNT(SHIP.SHIP_ID) AS "Number of Ships"
+			FROM SHIP
+			INNER JOIN TRIP ON TRIP.SHIP_ID = SHIP.SHIP_ID
+			WHERE TRIP.TRIP_DATE < '2021-06-24'; 
+		 
+
+		-- How many employees are certified to work in the PERFORMANCE department?
+		CREATE OR REPLACE VIEW VIEW_EMPLOYEECERTIFIED_PERFORMANCE AS
+			SELECT COUNT(CERTIFICATION.EMPLOYEE_ID)
+			FROM CERTIFICATION
+			INNER JOIN DEPARTMENT ON DEPARTMENT.DEPARTMENT_ID = CERTIFICATION.DEPARTMENT_ID
+			WHERE DEPARTMENT.DEPARTMENT_NAME = 'Performance'; 
+		
+        
+END$$
+DELIMITER ;
+
+
+/*
+	Create Datas Stored Procedure
+*/
+	DELIMITER $$
+	DROP PROCEDURE IF EXISTS SP_CREATE_DATA$$
+	CREATE PROCEDURE SP_CREATE_DATA()
+	BEGIN
+		CALL SP_DROP_TABLES();
+		CALL SP_CREATE_TABLES();
+		CALL SP_CREATE_VIEWS();
+		CALL SP_POPULATE_DATA();
+	END$$
+	DELIMITER ;
+
+
+/*
+	Show result Stored Procedure
+*/
+	DELIMITER $$
+	DROP PROCEDURE IF EXISTS SP_SHOW_RESULT$$
+	CREATE PROCEDURE SP_SHOW_RESULT()
+	BEGIN
+    /* Commented out VIEWS are tables containing all information of CUSTOMERS, EMPLOYEES, STAFF, and TRIPS
+		SELECT * FROM VIEW_CUSTOMERS_ALL; 
+        SELECT * FROM VIEW_EMPLOYEES_ALL;
+        SELECT * FROM VIEW_STAFF_ALL;
+        SELECT * FROM VIEW_TRIP_ALL;
+	*/
+        SELECT * FROM VIEW_CUSTOMERS_SANDIEGOTOSEATTLE;
+        SELECT * FROM VIEW_CUSTOMERSTOTAL_ANCHORAGETOHONOLULU;
+        SELECT * FROM VIEW_TOTALTRIPS_WITHOUTDAISYCHANG;
+        SELECT * FROM VIEW_NOSTAFF_DEPARTMENTS;
+        SELECT * FROM VIEW_TOTALSHIPSSAIL_BEFOREDATE; 
+        SELECT * FROM VIEW_EMPLOYEECERTIFIED_PERFORMANCE; 
+	END$$
+	DELIMITER ;
+    
+
+CALL SP_CREATE_DATA();
+CALL SP_SHOW_RESULT();
